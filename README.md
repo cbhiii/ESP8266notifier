@@ -7,7 +7,7 @@ To use this application you will need a [ESP8266](https://en.wikipedia.org/wiki/
 
 ### Author
 
-- **Chuck Huffman** - [huffman.info](https://www.huffman.info)
+- **Chuck Huffman** - [huffman.info](http://www.huffman.info)
 
 ### License
 
