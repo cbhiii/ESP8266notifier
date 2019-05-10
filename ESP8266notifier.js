@@ -20,6 +20,7 @@ const wifi = require('Wifi');                         // Wifi methods
 const http = require('http');                         // HTTP methods
 const file = require('Storage');                      // Storage methods
 let justBooted = true;                                // set if just booted
+let falseTrigger = 0;
 let data = {};                                        // variables holder
 const title = 'ESP8266-Espruino IFTTT Notifier, (c) 2019 Chuck Huffman';
 
@@ -129,6 +130,7 @@ const log = (area, msg, action) => {
       esp.getResetInfo(),                             // ESP8266 reset info
       wifi.getDetails(),                              // wifi details
       wifi.getIP(),
+      "Falses: "+falseTrigger,                          // report false triggers
       data                                            // local IP addr
     ];
     justBooted = false;                               // don't run this again
@@ -136,7 +138,8 @@ const log = (area, msg, action) => {
     diag = {
       "Heap": esp.getState().freeHeap,                // ESP8266 mem heap
       "WiFi": wifi.getDetails().rssi,                 // Wifi RSSI dBm
-      "IP": wifi.getIP().ip                           // local IP addr
+      "IP": wifi.getIP().ip,                          // local IP addr
+      "Falses": falseTrigger                          // report false triggers
     };
   }
   if (action==1) {                                    // CALL HOME TO IFTTT
@@ -185,31 +188,47 @@ const app = () => {
   // prepare circuit board pin for use
   const contactPin = D4;                              // use pin GPIO4 (D2)
   pinMode(contactPin, "input_pullup");                // set input on board
+  let pinState = digitalRead(contactPin);             // set pinState
+
+  //
+  // act on pin contact change from setWatch functions
+  //
+  const contactCheck = (checkType, pin) => {
+    if (checkType==="short") {
+      if (pin===1 && pinState===0) {
+        log('MON',data.contactMessageOpen,2);
+        pinState = 1;
+      } else if (pin===0 && pinState===1) {
+        log('MON',data.contactMessageClose,2);
+        pinState = 0;
+      } else {
+        falseTrigger = falseTrigger + 1;
+      }
+    } else {
+      if (pin===1 && pinState===1) {
+        log('\n','MON',data.contactMessageLongOpen+" (over "+data.eventContactLongWait/1000+" seconds)",3);
+      }
+    }
+  };
 
   //
   // begin monitoring pin contact for change
   //
   const contactWatch = setWatch(() => {
-    if (digitalRead(contactPin)===1) {
-      log('MON',data.contactMessageOpen,2);
-    } else {
-      log('MON',data.contactMessageClose,2);
-    }
+    contactCheck('short',digitalRead(contactPin));
   }, contactPin, {
     repeat: true,                                     // repeat watch function
-    debounce: data.eventContactWait                   // wait until active (ms)
+    debounce: data.eventContactWait                   // wait to run (ms)
   });
 
   //
   // begin monitoring pin contact for long change
   //
   const contactLongerWatch = setWatch(() => {         // create monitor
-    if (digitalRead(contactPin)===1) {
-      log('MON',data.contactMessageLongOpen+" (over "+data.eventContactLongWait/1000+" seconds)",3);
-    }
+    contactCheck('long',digitalRead(contactPin));
   }, contactPin, {
     repeat: true,                                     // repeat watch function
-    debounce: data.eventContactLongWait               // wait until active (ms)
+    debounce: data.eventContactLongWait               // wait to run (ms)
   });
 
   // external LED indicator that app is running
@@ -240,4 +259,4 @@ const dataRetrieval = setInterval(() => {
   } else {
     getData();
   }
-}, 1000);
+}, 10000);
