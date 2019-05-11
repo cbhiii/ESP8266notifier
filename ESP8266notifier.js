@@ -14,39 +14,16 @@ const initLED = setInterval(() => {
   digitalPulse(D2,false,500);
 }, 1000);
 
+// get methods and variables declared
 E.setClock(80);                                       // run CPU at 80MHz
 const esp = require('ESP8266');                       // ESP8266 methods
 const wifi = require('Wifi');                         // Wifi methods
 const http = require('http');                         // HTTP methods
 const file = require('Storage');                      // Storage methods
 let justBooted = true;                                // set if just booted
-let falseTrigger = 0;
+let falseTrigger = 0;                                 // track false events
 let data = {};                                        // variables holder
 const title = 'ESP8266-Espruino IFTTT Notifier, (c) 2019 Chuck Huffman';
-
-//
-// Error flag detection and reporting for more information go to:
-// http://www.espruino.com/Reference#l_E_getErrorFlags
-//
-E.on('errorFlag',(errorFlags) => {
-  log("ERROR",errorFlags,1);
-});
-
-// on wifi dhcp timeout do the following...
-wifi.on('dhcp_timeout', () => (log('WIFI','Wifi DHCP timeout. No connecttion to access point or no IP address acquired.',2)));
-
-// on wifi disconnect do the following...
-wifi.on('disconnected', (details) => {
-  log('WIFI','Wifi disconnected: '+details.reason,2);
-  wifi.connect(data.ssid, {password:data.pswd}, (err) => {
-    if (err) {
-      log('WIFI','Error during connect. Check password and error message ->'+err,2);
-      wifi.disconnect();                              // disconnect
-    } else {
-      log('WIFI','Wifi connected.',1);
-    }
-  });
-});
 
 //
 // load application data from remote file using '.url' info
@@ -57,12 +34,11 @@ const getData = () => {
   let output = "";
 
   http.get(url, function(res)  {
-    let d = "";                                         // capture reply with d
-    res.on('data', function(data) {                     // get data (in reply)
-      d+= data;                                         // append to 'd'
+    let d = "";                                       // capture reply with d
+    res.on('data', function(data) {                   // get data (in reply)
+      d+= data;                                       // append to 'd'
     });
-    res.on('close', function() {                        // on close process 'd'
-    // console.log('Output from callHome: ',d);
+    res.on('close', function() {                      // on close process 'd'
       output = JSON.parse(d);
       data = {
         device: getSerial(),
@@ -130,7 +106,7 @@ const log = (area, msg, action) => {
       esp.getResetInfo(),                             // ESP8266 reset info
       wifi.getDetails(),                              // wifi details
       wifi.getIP(),
-      "Falses: "+falseTrigger,                          // report false triggers
+      "Falses: "+falseTrigger,                        // report false events
       data                                            // local IP addr
     ];
     justBooted = false;                               // don't run this again
@@ -142,39 +118,81 @@ const log = (area, msg, action) => {
       "Falses": falseTrigger                          // report false triggers
     };
   }
-  if (action==1) {                                    // CALL HOME TO IFTTT
-    if (wifi.getDetails().status=="connected") {
-      callIFTTT(                                      // send data to IFTTT
+
+  // take action based on logging flag passed in
+  switch (action) {
+
+    case 1:
+      callIFTTT(                                      // call home via IFTTT
         data.callHomeEvent,
         data.callHomeEventKey,
         area+" : "+data.device,
         msg,
         diag
       );
-    } else {
-      console.log(area,'No Wifi - CANNOT contact IFTTT!\n',diag);
-    }
-  } else if (action==2) {                             // NOTIFY on event
-    if (wifi.getDetails().status=="connected") {
-      callIFTTT(                                      // send data to IFTTT
+    break;
+
+    case 2:
+      callIFTTT(                                      // notify of event 2
         data.eventContact,
         data.eventContactKey,
         data.deviceName,
         msg
       );
-    }
-  } else if (action==3) {                             // NOTIFY on long event
-    if (wifi.getDetails().status=="connected") {
-      callIFTTT(                                      // send data to IFTTT
+    break;
+
+    case 3:
+      callIFTTT(                                      // notify of event 3
         data.eventLongContact,
         data.eventContactKey,
         data.deviceName,
         msg
       );
-    }
+    break;
+
+    case 4:
+      callIFTTT(                                      // call home via IFTTT
+        data.callHomeEvent,
+        data.callHomeEventKey,
+        area+" : "+data.device,
+        msg,
+        diag
+      );
+
+      callIFTTT(                                      // notify of event 2
+        data.eventContact,
+        data.eventContactKey,
+        data.deviceName,
+        msg
+      );
+    break;
   }
   console.log(area,' - ',msg,'\n',diag);              // send to screen
 };
+
+//
+// Error flag detection and reporting for more information go to:
+// http://www.espruino.com/Reference#l_E_getErrorFlags
+//
+E.on('errorFlag',(errorFlags) => {
+  log("ERROR",errorFlags,4);
+});
+
+// on wifi dhcp timeout do the following...
+wifi.on('dhcp_timeout', () => (log('WIFI','Wifi DHCP timeout. No connecttion to access point or no IP address acquired.',4)));
+
+// on wifi disconnect do the following...
+wifi.on('disconnected', (details) => {
+  log('WIFI','Wifi disconnected: '+details.reason,4);
+  wifi.connect(data.ssid, {password:data.pswd}, (err) => {
+    if (err) {
+      log('WIFI','Error during connect. Check password and error message ->'+err,4);
+      wifi.disconnect();                              // disconnect
+    } else {
+      log('WIFI','Wifi connected.',4);
+    }
+  });
+});
 
 //
 // Start application when invoked
@@ -183,7 +201,7 @@ const app = () => {
 
   clearInterval(dataRetrieval);                       // clear data load loop
 
-  log('INIT',title,1);                                // log start
+  log('INIT',title,4);                                // log start
 
   // prepare circuit board pin for use
   const contactPin = D4;                              // use pin GPIO4 (D2)
@@ -193,20 +211,20 @@ const app = () => {
   //
   // act on pin contact change from setWatch functions
   //
-  const contactCheck = (checkType, pin) => {
-    if (checkType==="short") {
-      if (pin===1 && pinState===0) {
-        log('MON',data.contactMessageOpen,2);
-        pinState = 1;
+  const contactCheck = (checkType, pin) => {          // check event
+    if (checkType==="short") {                        // short duraton event
+      if (pin===1 && pinState===0) {                  // if diff than old state
+        log('MON',data.contactMessageOpen,2);         // call logging
+        pinState = 1;                                 // invert pin state
       } else if (pin===0 && pinState===1) {
         log('MON',data.contactMessageClose,2);
         pinState = 0;
-      } else {
-        falseTrigger = falseTrigger + 1;
+      } else {                                        // record false trigger
+        falseTrigger = falseTrigger + 1;              // if no event match
       }
     } else {
-      if (pin===1 && pinState===1) {
-        log('\n','MON',data.contactMessageLongOpen+" (over "+data.eventContactLongWait/1000+" seconds)",3);
+      if (pin===1 && pinState===1) {                  // long duration event
+        log('MON',data.contactMessageLongOpen+" (over "+data.eventContactLongWait/1000+" seconds)",3);
       }
     }
   };
@@ -238,11 +256,11 @@ const app = () => {
   }, 60000);
 
   // regular check-in to log status
-  const regularCheck = setInterval(() => {
+  const regularCheck = setInterval(() => {            // check in function
     log('CHCK','regular check-in',1);
   }, data.callHomeCheckinWait);
 
-  // software check-in for new software
+  // software check-in for new software               // software update check
   // const softwareCheck = setInterval(() => {
   //   log('SOFT','software check-in',1);
   // }, data.callHomeSoftwareWait);
@@ -252,9 +270,9 @@ const app = () => {
 // try to load data specifics from remote server every 10 seconds
 //
 const dataRetrieval = setInterval(() => {
-  console.log('Looking for remote data load...');
+  console.log('Looking for remote data...');
   if (data.deviceName) {
-    console.log('Data load confirmed. Starting application.');
+    console.log('Data loading confirmed. Starting application.');
     app();
   } else {
     getData();
