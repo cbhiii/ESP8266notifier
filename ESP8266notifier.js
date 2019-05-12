@@ -104,6 +104,7 @@ const log = (area, msg, action) => {
     diag = [
       esp.getState(),                                 // state of ESP8266
       esp.getResetInfo(),                             // ESP8266 reset info
+      process.memory(),                               // get memory details
       wifi.getDetails(),                              // wifi details
       wifi.getIP(),
       "Falses: "+falseTrigger,                        // report false events
@@ -113,6 +114,7 @@ const log = (area, msg, action) => {
   } else {
     diag = {
       "Heap": esp.getState().freeHeap,                // ESP8266 mem heap
+      "Mem": process.memory(),                        // get memory details
       "WiFi": wifi.getDetails().rssi,                 // Wifi RSSI dBm
       "IP": wifi.getIP().ip,                          // local IP addr
       "Falses": falseTrigger                          // report false triggers
@@ -126,7 +128,7 @@ const log = (area, msg, action) => {
       callIFTTT(                                      // call home via IFTTT
         data.callHomeEvent,
         data.callHomeEventKey,
-        area+" : "+data.device,
+        area+" - "+data.deviceName+" - "+data.device,
         msg,
         diag
       );
